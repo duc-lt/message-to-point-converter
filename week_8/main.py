@@ -128,13 +128,20 @@ def main():
 
 技術研究院，曼尼普爾邦, 柒玖伍零零壹  (Chinese)
 """
-    text_file_to_encrypt = 'test.txt'
+
     keys_file = 'keys.txt'
     if not path.exists(keys_file):
         generate_keys(keys_file)
     priv_key_b, pub_key_b = get_keys(keys_file)
-    # encrypt(text_file_to_encrypt, pub_key_b)
-    decrypt(text_file_to_encrypt, priv_key_b)
+
+    # khi nào cần decrypt thì comment dòng 140 -> 143, tắt comment dòng 144
+    # encrypt thì làm ngược lại
+    text_file_to_encrypt = 'test.txt'
+    with open(text_file_to_encrypt, 'w') as text:
+        text.write(plain)
+    text.close()
+    encrypt(text_file_to_encrypt, pub_key_b)
+    # decrypt(text_file_to_encrypt, priv_key_b)
 
 
 if __name__ == '__main__':
