@@ -17,18 +17,18 @@ def main():
     root = os.getcwd()
     new_dir = os.path.join(root, 'nested')
     os.mkdir(new_dir)
-    for i in range(5):
+    for i in range(20):
         os.chdir(new_dir)
         os.mkdir(f'dir_{i}')
-        with open(f'file_{i}.txt', 'w') as test:
-            test.write(plain*1000)
+        with open(f'file_{i}.txt', 'w', encoding='utf-8') as test:
+            test.write(plain*10000)
         test.close()
         current = os.path.join(new_dir, f'dir_{i}')
         os.chdir(current)
-        for j in range(5):
+        for j in range(20):
             os.mkdir(f'dir_{j}')
-            with open(f'file_{j}.txt', 'w') as test:
-                test.write(plain)
+            with open(f'file_{j}.txt', 'w', encoding='utf-8') as test:
+                test.write(plain*10000)
             test.close()
 
 

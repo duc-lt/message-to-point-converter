@@ -1,12 +1,10 @@
-import base64
 from random import randrange
 from time import time
-import tkinter
+import tkinter as tk
 from tkinter import *
 from tkinter import messagebox
-import os
 from tkinter import filedialog
-import openpyxl
+from tkinter import ttk
 
 from core.elliptic_curve_operations import add, multiply
 from core.point import Point
@@ -152,39 +150,49 @@ def encrypt(a, b, p, filename, pub_key_b, g):
 #         file.truncate()
 #     file.close()
 
-window = tkinter.Tk()
-window.title("Data Entry Form")
+window = tk.Tk()
+window.title('File Encryption Tool')
 
-frame = tkinter.Frame(window)
-frame.pack()
+frame = tk.Frame(window)
+# frame.pack()
 
 # Elliptic Info
-elliptic_info_frame = tkinter.LabelFrame(frame, text="Elliptic curve Information")
+elliptic_info_frame = tk.LabelFrame(frame, text="Elliptic curve Information")
 elliptic_info_frame.grid(row= 0, column=0, padx=20, pady=10)
 
-a_label = tkinter.Label(elliptic_info_frame, text="a value:")
+style = ttk.Style(window)
+style.configure('lefttab.TNotebook', tabposition='wn')
+tabs = ttk.Notebook(window, style='lefttab.TNotebook')
+f1 = tk.Frame(tabs, bg='red', width=200, height=200)
+f2 = tk.Frame(tabs, bg='blue', width=200, height=200)
+
+tabs.add(f1, text='Frame 1')
+tabs.add(f2, text='Frame 2')
+tabs.grid(row=0, column=0, sticky="nw")
+
+a_label = tk.Label(elliptic_info_frame, text="a value:")
 a_label.grid(row=0, column=0)
-a_entry = tkinter.Entry(elliptic_info_frame)
+a_entry = tk.Entry(elliptic_info_frame)
 a_entry.grid(row=0, column=1)
 
-b_label = tkinter.Label(elliptic_info_frame, text="b value:")
+b_label = tk.Label(elliptic_info_frame, text="b value:")
 b_label.grid(row=1, column=0)
-b_entry = tkinter.Entry(elliptic_info_frame)
+b_entry = tk.Entry(elliptic_info_frame)
 b_entry.grid(row=1, column=1)
 
-p_label = tkinter.Label(elliptic_info_frame, text="p value:")
+p_label = tk.Label(elliptic_info_frame, text="p value:")
 p_label.grid(row=2, column=0)
-p_entry = tkinter.Entry(elliptic_info_frame)
+p_entry = tk.Entry(elliptic_info_frame)
 p_entry.grid(row=2, column=1)
 
-gene_point_label = tkinter.Label(elliptic_info_frame, text="Generate point:")
+gene_point_label = tk.Label(elliptic_info_frame, text="Generate point:")
 gene_point_label.grid(row=3, column=0)
 
-x_entry = tkinter.Entry(elliptic_info_frame)
+x_entry = tk.Entry(elliptic_info_frame)
 # x_entry.insert(END, 'x')
 x_entry.grid(row=3, column=1)
 
-y_entry = tkinter.Entry(elliptic_info_frame)
+y_entry = tk.Entry(elliptic_info_frame)
 # y_entry.insert(END, 'y')
 y_entry.grid(row=3, column=2)
 
@@ -198,33 +206,33 @@ for widget in elliptic_info_frame.winfo_children():
     widget.grid_configure(padx=10, pady=5)
 
 # Accept terms
-import_file_frame = tkinter.LabelFrame(frame, text="Convert infomation")
+import_file_frame = tk.LabelFrame(frame, text="Convert infomation")
 import_file_frame.grid(row=1, column=0, sticky="news", padx=20, pady=10)
 
-import_file_label = tkinter.Label(import_file_frame,text='File location:')  
+import_file_label = tk.Label(import_file_frame,text='File location:')  
 import_file_label.grid(row=1, column=0)
-import_file_location = tkinter.StringVar()
-import_file_entry = tkinter.Entry(import_file_frame, textvariable=import_file_location, state=DISABLED,  width=50)
+import_file_location = tk.StringVar()
+import_file_entry = tk.Entry(import_file_frame, textvariable=import_file_location, state=DISABLED,  width=50)
 import_file_entry.grid(row=1, column=1)
 
-import_file_button = tkinter.Button(import_file_frame, text='Import File', command = lambda:upload_file())
+import_file_button = tk.Button(import_file_frame, text='Import File', command = lambda:upload_file())
 import_file_button.grid(row=1, column=2)
 
-browse_folder_label = tkinter.Label(import_file_frame,text='Save location:')  
+browse_folder_label = tk.Label(import_file_frame,text='Save location:')  
 browse_folder_label.grid(row=2, column=0)
-browse_folder_path = tkinter.StringVar()
+browse_folder_path = tk.StringVar()
 browse_folder_path.set('D:\Documents\DuAnTotNghiep\Elliptic\elliptic-curve-python\message_to_point\Saves')
-browse_folder_entry = tkinter.Entry(import_file_frame, textvariable=browse_folder_path, state=DISABLED,  width=50)
+browse_folder_entry = tk.Entry(import_file_frame, textvariable=browse_folder_path, state=DISABLED,  width=50)
 browse_folder_entry.grid(row=2, column=1)
 
-browse_folder_button = tkinter.Button(import_file_frame, text='Browse', command = lambda:browse_folder())
+browse_folder_button = tk.Button(import_file_frame, text='Browse', command = lambda:browse_folder())
 browse_folder_button.grid(row=2, column=2)
 
 for widget in import_file_frame.winfo_children():
     widget.grid_configure(padx=10, pady=5)
 
 # Button
-button = tkinter.Button(frame, text="CONVERT", command = encript_file)
+button = tk.Button(frame, text="CONVERT", command = encript_file)
 button.grid(row=2, column=0, sticky="news", padx=20, pady=10)
  
 window.mainloop()

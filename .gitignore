@@ -167,6 +167,10 @@ poetry.toml
 *.txt
 *.ppt*
 nested/
+*.enc
+*.dec
+priv_key
+pub_key
 
 # VSCode debugger config
 .vscode/
