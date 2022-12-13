@@ -1,238 +1,191 @@
-from random import randrange
 from time import time
 import tkinter as tk
-from tkinter import *
 from tkinter import messagebox
 from tkinter import filedialog
 from tkinter import ttk
+from config import ELLIPTIC_CURVES
+import os
+import threading
 
-from core.elliptic_curve_operations import add, multiply
-from core.point import Point
-from random import randrange
-from os import path
-
-BASE = 65536
-whitespace = ord(' ')
-separator = 'UwU'
-
-def encript_file():
-    try:
-        start_time = time()
-        a = int(a_entry.get())
-        b = int(b_entry.get())
-        p = int(p_entry.get())
-        g = Point(int(x_entry.get()), int(y_entry.get()))
-
-        file = open(import_file_entry.get(), 'r', encoding='utf-8')
-        plaintext = file.read()
-
-        keys_file = 'keys.txt'
-        if not path.exists(keys_file):
-            generate_keys(a, b, p, keys_file, g)
-        priv_key_b, pub_key_b = get_keys(keys_file)
-
-        text_file_to_encrypt = browse_folder_entry.get() + '/test.txt'
-        with open(text_file_to_encrypt, 'w', encoding='utf-8') as text:
-            text.write(plaintext)
-        text.close()
-        encrypt(a, b, p, text_file_to_encrypt, pub_key_b, g)
-        encript_time = time() - start_time
-        messagebox.showinfo("Message", f"Convert file successfully!!! \nConvert time: {encript_time}")
-    except Exception as e:
-        messagebox.showinfo("Error", e)
-
-def upload_file():
-    file_location = filedialog.askopenfilename()
-    import_file_location.set(file_location)
-
-def browse_folder():
-    global folder_path
-    foldername = filedialog.askdirectory()
-    browse_folder_path.set(foldername)
+from crypto.ec_elgamal import decrypt, encrypt, generate_keys, get_keys
 
 
-def to_base(n, base=BASE):
-    digits = []
-    while n:
-        digits.insert(0, n % base)
-        n //= base
-    return digits
+class CryptApp(ttk.Notebook):
+    def __init__(self, master, *args, **kwargs):
+        super().__init__(master, *args, **kwargs)
+        f1 = tk.Frame(self)
+        f2 = tk.Frame(self)
+        self.add(f1, text='Encrypt Files')
+        self.add(f2, text='Decrypt Files')
+        self.grid(row=0, column=0, sticky="nw")
 
+        curve_select_area = tk.LabelFrame(f1, text="Choose curve")
+        curve_select_area.grid(row=0, column=0, padx=20,
+                               pady=10, sticky='news')
+        options = list(ELLIPTIC_CURVES.keys())
+        self.selected = tk.StringVar()
+        self.selected.set(options[0])
+        curve_selector = ttk.OptionMenu(
+            curve_select_area, self.selected, options[0], *options, command=lambda _: self.choose_curve_from_selector())
+        curve_selector.grid(row=0, column=0, sticky='news', padx=10, pady=5)
+        self.choose_curve_from_selector()
 
-def get_group_size(n):
-    return len(to_base(n)) - 1
+        # Encryption tab
+        self.import_file_frame = tk.LabelFrame(
+            f1, text="Encryption information")
+        self.import_file_frame.grid(
+            row=1, column=0, sticky="news", padx=20, pady=10)
 
+        import_file_label = tk.Label(
+            self.import_file_frame, text='File location:')
+        import_file_label.grid(row=1, column=0)
+        self.import_file_location = tk.StringVar()
+        self.import_file_entry = tk.Entry(
+            self.import_file_frame, textvariable=self.import_file_location, state='disabled', width=50)
+        self.import_file_entry.grid(row=1, column=1)
 
-def cipher_to_point(ciphertext):
-    x_string, y_string = ciphertext.split(separator)
-    x = int(f'0x{x_string}', 16)
-    y = int(f'0x{y_string}', 16)
-    return Point(x, y)
+        import_file_button = tk.Button(
+            self.import_file_frame, text='Browse file...', command=lambda: self.upload_file())
+        import_file_button.grid(row=1, column=2)
 
+        browse_folder_label = tk.Label(
+            self.import_file_frame, text='Save location:')
+        browse_folder_label.grid(row=2, column=0)
+        self.browse_folder_path = tk.StringVar()
+        self.browse_folder_entry = tk.Entry(
+            self.import_file_frame, textvariable=self.browse_folder_path, state='disabled', width=50)
+        self.browse_folder_entry.grid(row=2, column=1)
 
-def generate_keys(a, b, p, keys_file, g):
-    priv_key_b = randrange(1, p)
-    pub_key_b = multiply(a, b, p, priv_key_b, g)
-    with open(keys_file, 'w') as keys:
-        keys.writelines([f'{priv_key_b:x}\n',
-                        f'{pub_key_b.get_x():x}{separator}{pub_key_b.get_y():x}\n'])
-    keys.close()
+        browse_folder_button = tk.Button(
+            self.import_file_frame, text='Browse folder...', command=lambda: self.browse_folder())
+        browse_folder_button.grid(row=2, column=2)
 
+        for widget in self.import_file_frame.winfo_children():
+            widget.grid_configure(padx=10, pady=5)
 
-def get_keys(keys_file):
-    with open(keys_file, 'r') as keys:
-        priv_key_b_str, pub_key_b_str = keys.readlines()
-        priv_key_b = int(priv_key_b_str, 16)
-        pub_key_b = cipher_to_point(pub_key_b_str)
-    keys.close()
-    return priv_key_b, pub_key_b
+        button = tk.Button(f1, text="ENCRYPT",
+                           command=self.tk_process_encryption)
+        button.grid(row=2, column=0, sticky="news", padx=20, pady=10)
 
+        # Decryption tab
+        self.import_file_frame_dec = tk.LabelFrame(
+            f2, text="Decryption information")
+        self.import_file_frame_dec.grid(
+            row=1, column=0, sticky="news", padx=20, pady=10)
 
-def encrypt(a, b, p, filename, pub_key_b, g):
-    with open(filename, 'r+', encoding='utf-8') as file:
-        plaintext = file.read()
-        ascii_values = list(map(ord, list(plaintext)))
-        group_size = get_group_size(p)
-        ascii_value_groups = [ascii_values[i:i + group_size]
-                              for i in range(0, len(ascii_values), group_size)]
+        import_file_label_dec = tk.Label(
+            self.import_file_frame_dec, text='File location:')
+        import_file_label_dec.grid(row=1, column=0)
+        self.import_file_location_dec = tk.StringVar()
+        self.import_file_entry_dec = tk.Entry(
+            self.import_file_frame_dec, textvariable=self.import_file_location_dec, state='disabled', width=50)
+        self.import_file_entry_dec.grid(row=1, column=1)
 
-        ascii_value_group_sums = []
-        for group in ascii_value_groups:
-            sum = 0
-            group_len = len(group)
-            for i in range(group_len):
-                sum += group[group_len - i - 1] * BASE ** i
-            ascii_value_group_sums.append(sum)
+        import_file_button_dec = tk.Button(
+            self.import_file_frame_dec, text='Browse file...', command=lambda: self.upload_file_dec())
+        import_file_button_dec.grid(row=1, column=2)
 
-        if (len(ascii_value_group_sums) % 2 == 1):
-            ascii_value_group_sums.append(whitespace)
-        message_points = [tuple(ascii_value_group_sums[i:i + 2])
-                          for i in range(0, len(ascii_value_group_sums), 2)]
+        browse_folder_label_dec = tk.Label(
+            self.import_file_frame_dec, text='Save location:')
+        browse_folder_label_dec.grid(row=2, column=0)
+        self.browse_folder_path_dec = tk.StringVar()
+        self.browse_folder_entry_dec = tk.Entry(
+            self.import_file_frame_dec, textvariable=self.browse_folder_path_dec, state='disabled', width=50)
+        self.browse_folder_entry_dec.grid(row=2, column=1)
 
-        priv_key_a = randrange(1, p)
-        cipher_1 = multiply(a, b, p, priv_key_a, g)
-        cipher_2 = [add(a, b, p, Point(point[0], point[1]), multiply(a, b, p, priv_key_a, pub_key_b))
-                    for point in message_points]
+        browse_folder_button_dec = tk.Button(
+            self.import_file_frame_dec, text='Browse folder...', command=lambda: self.browse_folder_dec())
+        browse_folder_button_dec.grid(row=2, column=2)
 
-        file.seek(0)
-        file.write(f'{cipher_1.get_x():x}{separator}{cipher_1.get_y():x}\n')
-        file.writelines(
-            [f'{cipher.get_x():x}{separator}{cipher.get_y():x}\n' for cipher in cipher_2])
-        file.truncate()
-    file.close()
+        for widget in self.import_file_frame_dec.winfo_children():
+            widget.grid_configure(padx=10, pady=5)
 
+        button_dec = tk.Button(
+            f2, text="DECRYPT", command=self.tk_process_decryption)
+        button_dec.grid(row=2, column=0, sticky="news", padx=20, pady=10)
 
-# def decrypt(filename, priv_key_b):
-#     with open(filename, 'r+') as file:
-#         first_line, *rest = file.readlines()
-#         cipher_1 = cipher_to_point(first_line)
-#         cipher_2 = list(map(cipher_to_point, rest))
-#         message_points = [add(a, b, p, cipher, multiply(
-#             a, b, p, -priv_key_b, cipher_1)) for cipher in cipher_2]
+    def choose_curve_from_selector(self):
+        selected_curve = ELLIPTIC_CURVES.get(self.selected.get())
+        self.selected_curve_type = list(selected_curve.keys())[0]
+        self.p, self.a, self.b, self.g = [selected_curve.get(key)
+                                        for key in selected_curve.keys()]
 
-#         ascii_value_group_sums = []
-#         for point in message_points:
-#             ascii_value_group_sums.extend((point.get_x(), point.get_y()))
+    def encrypt_file(self):
+        try:
+            progress_window = tk.Toplevel(window)
+            progress_window.title('Encrypting...')
+            progress_bar = ttk.Progressbar(
+                progress_window, orient='horizontal', length=300, mode='indeterminate')
+            progress_bar.pack(pady=20)
+            progress_bar.start(5)
+            filepath = self.import_file_entry.get()
+            filename = os.path.split(filepath)[1]
+            generate_keys(self.selected_curve_type,
+                          self.p, self.a, self.b, self.g)
+            encrypted_file_dest = f'{self.browse_folder_entry.get()}/{filename}.enc'
+            pub_key_b = get_keys(self.selected_curve_type)[1]
 
-#         ascii_value_groups = []
-#         for n in ascii_value_group_sums:
-#             if n == 32:
-#                 continue
-#             ascii_value_groups.append(to_base(n))
+            start_time = time()
+            encrypt(self.p, self.a, self.b, self.g,
+                    filepath, encrypted_file_dest, pub_key_b)
+            encrypt_time = time() - start_time
+            progress_window.destroy()
+            messagebox.showinfo(
+                "Message", "File has been encrypted!\nEncryption time: %.2fs" % round(encrypt_time, 3))
+        except Exception as e:
+            messagebox.showinfo("Error", e)
 
-#         ascii_values = []
-#         for group in ascii_value_groups:
-#             ascii_values.extend(group)
+    def tk_process_encryption(self):
+        threading.Thread(target=self.encrypt_file).start()
 
-#         plaintext = ''.join([chr(ascii_value) for ascii_value in ascii_values])
-#         file.seek(0)
-#         file.write(plaintext)
-#         file.truncate()
-#     file.close()
+    def decrypt_file(self):
+        try:
+            progress_window = tk.Toplevel(window)
+            progress_window.title('Decrypting...')
+            progress_bar = ttk.Progressbar(
+                progress_window, orient='horizontal', length=300, mode='indeterminate')
+            progress_bar.pack(pady=20)
+            progress_bar.start(5)
+            filepath = self.import_file_entry_dec.get()
+            filename = os.path.split(filepath)[1]
+            decrypted_file_dest = f'{self.browse_folder_entry_dec.get()}/{filename.replace(".enc", "")}'
+            priv_key_b = get_keys(self.selected_curve_type)[0]
+
+            start_time = time()
+            decrypt(self.p, self.a, self.b,
+                    filepath, decrypted_file_dest, priv_key_b)
+            encrypt_time = time() - start_time
+            progress_window.destroy()
+            messagebox.showinfo(
+                "Message", "File has been decrypted!\nDecryption time: %.2fs" % round(encrypt_time, 3))
+        except Exception as e:
+            messagebox.showinfo("Error", e)
+    
+    def tk_process_decryption(self):
+        threading.Thread(target=self.decrypt_file).start()
+
+    def upload_file(self):
+        file_location = filedialog.askopenfilename()
+        self.import_file_location.set(file_location)
+        basepath = os.path.split(self.import_file_location.get())[0]
+        self.browse_folder_path.set(basepath)
+
+    def browse_folder(self):
+        foldername = filedialog.askdirectory()
+        self.browse_folder_path.set(foldername)
+
+    def upload_file_dec(self):
+        file_location = filedialog.askopenfilename()
+        self.import_file_location_dec.set(file_location)
+        basepath = os.path.split(self.import_file_location_dec.get())[0]
+        self.browse_folder_path_dec.set(basepath)
+
+    def browse_folder_dec(self):
+        foldername = filedialog.askdirectory()
+        self.browse_folder_path_dec.set(foldername)
+
 
 window = tk.Tk()
 window.title('File Encryption Tool')
-
-frame = tk.Frame(window)
-# frame.pack()
-
-# Elliptic Info
-elliptic_info_frame = tk.LabelFrame(frame, text="Elliptic curve Information")
-elliptic_info_frame.grid(row= 0, column=0, padx=20, pady=10)
-
-style = ttk.Style(window)
-style.configure('lefttab.TNotebook', tabposition='wn')
-tabs = ttk.Notebook(window, style='lefttab.TNotebook')
-f1 = tk.Frame(tabs, bg='red', width=200, height=200)
-f2 = tk.Frame(tabs, bg='blue', width=200, height=200)
-
-tabs.add(f1, text='Frame 1')
-tabs.add(f2, text='Frame 2')
-tabs.grid(row=0, column=0, sticky="nw")
-
-a_label = tk.Label(elliptic_info_frame, text="a value:")
-a_label.grid(row=0, column=0)
-a_entry = tk.Entry(elliptic_info_frame)
-a_entry.grid(row=0, column=1)
-
-b_label = tk.Label(elliptic_info_frame, text="b value:")
-b_label.grid(row=1, column=0)
-b_entry = tk.Entry(elliptic_info_frame)
-b_entry.grid(row=1, column=1)
-
-p_label = tk.Label(elliptic_info_frame, text="p value:")
-p_label.grid(row=2, column=0)
-p_entry = tk.Entry(elliptic_info_frame)
-p_entry.grid(row=2, column=1)
-
-gene_point_label = tk.Label(elliptic_info_frame, text="Generate point:")
-gene_point_label.grid(row=3, column=0)
-
-x_entry = tk.Entry(elliptic_info_frame)
-# x_entry.insert(END, 'x')
-x_entry.grid(row=3, column=1)
-
-y_entry = tk.Entry(elliptic_info_frame)
-# y_entry.insert(END, 'y')
-y_entry.grid(row=3, column=2)
-
-a_entry.insert(END, '6277101735386680763835789423207666416083908700390324961276')
-b_entry.insert(END, '2455155546008943817740293915197451784769108058161191238065')
-p_entry.insert(END, '6277101735386680763835789423207666416083908700390324961279')
-x_entry.insert(END, '602046282375688656758213480587526111916698976636884684818')
-y_entry.insert(END, '174050332293622031404857552280219410364023488927386650641')
-
-for widget in elliptic_info_frame.winfo_children():
-    widget.grid_configure(padx=10, pady=5)
-
-# Accept terms
-import_file_frame = tk.LabelFrame(frame, text="Convert infomation")
-import_file_frame.grid(row=1, column=0, sticky="news", padx=20, pady=10)
-
-import_file_label = tk.Label(import_file_frame,text='File location:')  
-import_file_label.grid(row=1, column=0)
-import_file_location = tk.StringVar()
-import_file_entry = tk.Entry(import_file_frame, textvariable=import_file_location, state=DISABLED,  width=50)
-import_file_entry.grid(row=1, column=1)
-
-import_file_button = tk.Button(import_file_frame, text='Import File', command = lambda:upload_file())
-import_file_button.grid(row=1, column=2)
-
-browse_folder_label = tk.Label(import_file_frame,text='Save location:')  
-browse_folder_label.grid(row=2, column=0)
-browse_folder_path = tk.StringVar()
-browse_folder_path.set('D:\Documents\DuAnTotNghiep\Elliptic\elliptic-curve-python\message_to_point\Saves')
-browse_folder_entry = tk.Entry(import_file_frame, textvariable=browse_folder_path, state=DISABLED,  width=50)
-browse_folder_entry.grid(row=2, column=1)
-
-browse_folder_button = tk.Button(import_file_frame, text='Browse', command = lambda:browse_folder())
-browse_folder_button.grid(row=2, column=2)
-
-for widget in import_file_frame.winfo_children():
-    widget.grid_configure(padx=10, pady=5)
-
-# Button
-button = tk.Button(frame, text="CONVERT", command = encript_file)
-button.grid(row=2, column=0, sticky="news", padx=20, pady=10)
- 
+CryptApp(window).pack()
 window.mainloop()

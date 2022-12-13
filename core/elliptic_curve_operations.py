@@ -18,7 +18,7 @@ def add(a, b, p, p1: Point, p2: Point):
     if p2.equals_to(POINT_AT_INFINITY) and is_on_curve(a, b, p, p1):
         return p1
 
-    if is_on_curve(a, b, p, p2):
+    if is_on_curve(a, b, p, p1) or is_on_curve(a, b, p, p2):
         x1, y1 = p1.get_x(), p1.get_y()
         x2, y2 = p2.get_x(), p2.get_y()
         if (p1.equals_to(p2) and y1 == 0) or (not p1.equals_to(p2) and x1 == x2):
