@@ -48,3 +48,11 @@ def to_base_2(a):
         q /= 2
         s += 1
     return q, s
+
+
+def to_base(n, base):
+    digits = []
+    while n:
+        digits.insert(0, n % base)
+        n //= base
+    return digits
