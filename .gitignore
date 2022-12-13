@@ -169,8 +169,11 @@ poetry.toml
 nested/
 *.enc
 *.dec
-priv_key
-pub_key
+priv_key*
+pub_key*
 
 # VSCode debugger config
 .vscode/
+
+# Week 8 folder
+week_8/

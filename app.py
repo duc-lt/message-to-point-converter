@@ -105,8 +105,8 @@ class CryptApp(ttk.Notebook):
         button_dec.grid(row=2, column=0, sticky="news", padx=20, pady=10)
 
     def choose_curve_from_selector(self):
-        selected_curve = ELLIPTIC_CURVES.get(self.selected.get())
-        self.selected_curve_type = list(selected_curve.keys())[0]
+        self.selected_curve_type = self.selected.get()
+        selected_curve = ELLIPTIC_CURVES.get(self.selected_curve_type)
         self.p, self.a, self.b, self.g = [selected_curve.get(key)
                                         for key in selected_curve.keys()]
 
