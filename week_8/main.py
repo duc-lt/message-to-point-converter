@@ -1,32 +1,32 @@
 from time import time
-from core.elliptic_curve_operations import add, is_on_curve, multiply
+from core.elliptic_curve_operations import add, multiply
 from core.point import Point
 from random import randrange
-import os
+import base64
 from datetime import timedelta
 from math import log
-from multiprocessing import Pool
-
+from itertools import islice
+import os
 
 BASE = 65536
 WHITESPACE = ord(' ')
 SEPARATOR = 'g'
-PRIV_KEY_PATH = 'priv_key'
-PUB_KEY_PATH = 'pub_key'
+PRIV_KEY_PATH = 'D:\message-to-point-converter\priv_key'
+PUB_KEY_PATH = 'D:\message-to-point-converter\pub_key'
 
 # NIST P-192
-p = 0xfffffffffffffffffffffffffffffffeffffffffffffffff
-a = 0xfffffffffffffffffffffffffffffffefffffffffffffffc
-b = 0x64210519e59c80e70fa7e9ab72243049feb8deecc146b9b1
-g = Point(0x188da80eb03090f67cbf20eb43a18800f4ff0afd82ff1012,
-          0x07192b95ffc8da78631011ed6b24cdd573f977a11e794811)
+# p = 0xfffffffffffffffffffffffffffffffeffffffffffffffff
+# a = 0xfffffffffffffffffffffffffffffffefffffffffffffffc
+# b = 0x64210519e59c80e70fa7e9ab72243049feb8deecc146b9b1
+# g = Point(0x188da80eb03090f67cbf20eb43a18800f4ff0afd82ff1012,
+#           0x07192b95ffc8da78631011ed6b24cdd573f977a11e794811)
 
 # NIST P-256
-# p = 0xffffffff00000001000000000000000000000000ffffffffffffffffffffffff
-# a = 0xffffffff00000001000000000000000000000000fffffffffffffffffffffffc
-# b = 0x5ac635d8aa3a93e7b3ebbd55769886bc651d06b0cc53b0f63bce3c3e27d2604b
-# g = Point(0x6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296,
-#           0x4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5)
+p = 0xffffffff00000001000000000000000000000000ffffffffffffffffffffffff
+a = 0xffffffff00000001000000000000000000000000fffffffffffffffffffffffc
+b = 0x5ac635d8aa3a93e7b3ebbd55769886bc651d06b0cc53b0f63bce3c3e27d2604b
+g = Point(0x6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296,
+          0x4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5)
 
 # brainpoolP192t1
 # p = 0xc302f41d932a36cda7a3463093d18db78fce476de1a86297
@@ -91,22 +91,25 @@ def get_keys():
 
 
 def encrypt(filename, pub_key_b):
-    def read_in_chunks(file_object, chunk_size=512):
+    def read_in_chunks(file_object, chunk_size=1024):
         while True:
             data = file_object.read(chunk_size)
             if not data:
                 break
             yield data
-
-    with open(filename, 'r', encoding='utf-8') as plain_file, open(f'{filename}.enc', 'w', encoding='utf-8') as cipher_file:
+    real_name = os.path.split(filename)[1]
+    with open(filename, 'rb') as plain_file, open(f'{real_name}.enc', 'wb') as cipher_file:
         priv_key_a = randrange(1, p)
         cipher_1 = multiply(a, b, p, priv_key_a, g)
         shared_key = multiply(a, b, p, priv_key_a, pub_key_b)
         cipher_file.write(
-            f'{cipher_1.get_x():x}{SEPARATOR}{cipher_1.get_y():x}\n')
+            b'%x%b%x\n' % (cipher_1.get_x(),
+                           SEPARATOR.encode(),
+                           cipher_1.get_y()))
 
         for text in read_in_chunks(plain_file):
-            ascii_values = list(map(ord, list(text)))
+            b64text = base64.b64encode(text).decode()
+            ascii_values = list(map(ord, b64text))
             ascii_value_group_sums = []
 
             for i in range(0, len(ascii_values), GROUP_SIZE):
@@ -115,7 +118,7 @@ def encrypt(filename, pub_key_b):
                     [e * BASE ** j for j, e in enumerate(group)])
                 ascii_value_group_sums.append(coordinate)
 
-            if (len(ascii_value_group_sums) % 2 == 1):
+            if len(ascii_value_group_sums) % 2 == 1:
                 ascii_value_group_sums.append(WHITESPACE)
 
             for i in range(0, len(ascii_value_group_sums), 2):
@@ -123,23 +126,33 @@ def encrypt(filename, pub_key_b):
                 cipher_point = add(a, b, p, Point(
                     point[0], point[1]), shared_key)
                 cipher_file.write(
-                    f'{cipher_point.get_x():x}{SEPARATOR}{cipher_point.get_y():x}\n')
+                    b'%x%b%x\n' % (cipher_point.get_x(),
+                                   SEPARATOR.encode(),
+                                   cipher_point.get_y()))
 
 
 def decrypt(filename, priv_key_b):
-    with open(filename, 'r', encoding='utf-8') as cipher_file, open(filename.replace('.enc', '.dec'), 'w', encoding='utf-8') as plain_file:
-        cipher_lines = cipher_file.read().splitlines()
-        cipher_1, *cipher_2 = list(map(cipher_to_point, cipher_lines))
+    def read_in_lines(file_object, lines_count=128):
+        while True:
+            data = list(islice(file_object, lines_count))
+            if not data:
+                break
+            yield data
+
+    with open(filename, 'rb') as cipher_file, open(filename.replace('.enc', ''), 'wb') as plain_file:
+        cipher_1 = cipher_to_point(cipher_file.readline().decode())
         neg_shared_key = multiply(a, b, p, -priv_key_b, cipher_1)
-        ascii_values = []
-        for cipher in cipher_2:
-            message_point = add(a, b, p, cipher, neg_shared_key)
-            x, y = message_point.get_x(), message_point.get_y()
-            ascii_values.extend(to_base(x) + to_base(y))
-        plaintext = ''.join(list(map(chr, ascii_values)))
-        plain_file.seek(0)
-        plain_file.write(plaintext)
-        plain_file.truncate()
+        plaintext = ''
+        for lines in read_in_lines(cipher_file):
+            cipher_2 = list(map(cipher_to_point, [line.decode() for line in lines]))
+            for cipher in cipher_2:
+                message_point = add(a, b, p, cipher, neg_shared_key)
+                x, y = message_point.get_x(), message_point.get_y()
+                plaintext += ''.join(list(map(chr, to_base(x, BASE) + to_base(y, BASE))))
+        b64lines = plaintext.split(' ')
+        lines = list(map(base64.b64decode, b64lines))
+        for line in lines:
+            plain_file.write(line)
 
 
 def main():
@@ -156,28 +169,30 @@ def main():
 技術研究院，曼尼普爾邦, 柒玖伍零零壹  (Chinese)
 """
 
-    if not (os.path.exists(PRIV_KEY_PATH) and os.path.exists(PUB_KEY_PATH)):
-        generate_keys()
-    priv_key_b, pub_key_b = get_keys()
+    # if not (os.path.exists(PRIV_KEY_PATH) and os.path.exists(PUB_KEY_PATH)):
+    #     generate_keys()
+    # generate_keys()
 
     # khi nào cần decrypt thì comment dòng 140 -> 143, tắt comment dòng 144
     # encrypt thì làm ngược lại
     start_time = time()
-    directory_to_encrypt = os.path.join(os.getcwd(), 'nested')
-    for root, _, files in os.walk(directory_to_encrypt):
-        if len(files) == 0:
-            continue
-        text_files = [os.path.join(root, text_file) for text_file in files]
-        # with Pool(2) as pool:
-        #     pool.starmap_async(encrypt, [(text_file, pub_key_b)
-        #                  for text_file in text_files])
-        #     pool.starmap_async(decrypt, [(text_file, priv_key_b)
-        #                  for text_file in text_files])
-        for text_file_to_encrypt in text_files:
-            encrypt(text_file_to_encrypt, pub_key_b)
-        # decrypt(text_file_to_encrypt + '.enc', priv_key_b)
+    # text_file_to_encrypt = "test.txt"
+    text_file_to_encrypt = "D:\Downloads\Danh-gia_Mau_Bao-cao-tieu-luan-cuoi-ky.pdf"
+    # directory_to_encrypt = os.path.join(os.getcwd(), 'nested')
+    # for root, _, files in os.walk(directory_to_encrypt):
+    #     if len(files) == 0:
+    #         continue
+    #     text_files = [os.path.join(root, text_file) for text_file in files]
+    # with Pool(2) as pool:
+    #     pool.starmap_async(encrypt, [(text_file, pub_key_b)
+    #                  for text_file in text_files])
+    #     pool.starmap_async(decrypt, [(text_file, priv_key_b)
+    #                  for text_file in text_files])
+    # for text_file_to_encrypt in text_files:
+    #     encrypt(text_file_to_encrypt, pub_key_b)
     # encrypt(text_file_to_encrypt, pub_key_b)
-    # decrypt(f'{text_file_to_encrypt}.enc', priv_key_b)
+    # decrypt('test.txt.enc', priv_key_b)
+    decrypt("D:\message-to-point-converter\week_8\Danh-gia_Mau_Bao-cao-tieu-luan-cuoi-ky.pdf.enc", priv_key_b)
     print(f'time: {str(timedelta(seconds=time() - start_time))}')
 
 

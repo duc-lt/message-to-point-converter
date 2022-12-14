@@ -13,6 +13,15 @@ from crypto.ec_elgamal import decrypt, encrypt, generate_keys, get_keys
 class CryptApp(ttk.Notebook):
     def __init__(self, master, *args, **kwargs):
         super().__init__(master, *args, **kwargs)
+        self.g = 0
+        self.b = 0
+        self.a = 0
+        self.p = 0
+        self.selected_curve_type = ''
+        self.thread_event = threading.Event()
+        self.encryption_time = 0
+        self.decryption_time = 0
+
         f1 = tk.Frame(self)
         f2 = tk.Frame(self)
         self.add(f1, text='Encrypt Files')
@@ -108,61 +117,81 @@ class CryptApp(ttk.Notebook):
         self.selected_curve_type = self.selected.get()
         selected_curve = ELLIPTIC_CURVES.get(self.selected_curve_type)
         self.p, self.a, self.b, self.g = [selected_curve.get(key)
-                                        for key in selected_curve.keys()]
+                                          for key in selected_curve.keys()]
 
     def encrypt_file(self):
+        self.thread_event.clear()
+        filepath = self.import_file_entry.get()
+        filename = os.path.split(filepath)[1]
+        generate_keys(self.selected_curve_type,
+                      self.p, self.a, self.b, self.g)
+        encrypted_file_dest = f'{self.browse_folder_entry.get()}/{filename}.enc'
+        pub_key_b = get_keys(self.selected_curve_type)[1]
+
+        start_time = time()
+        encrypt(self.p, self.a, self.b, self.g,
+                filepath, encrypted_file_dest, pub_key_b)
+        self.encryption_time = time() - start_time
+        self.thread_event.set()
+
+    def tk_process_encryption(self):
+        def check_thread_finished():
+            if self.thread_event.is_set():
+                progress_window.destroy()
+                messagebox.showinfo(
+                    "Message", "File has been encrypted!\nEncryption time: %.3fs" % round(self.encryption_time, 3))
+            else:
+                self.after(1000, check_thread_finished)
         try:
             progress_window = tk.Toplevel(window)
             progress_window.title('Encrypting...')
             progress_bar = ttk.Progressbar(
                 progress_window, orient='horizontal', length=300, mode='indeterminate')
             progress_bar.pack(pady=20)
-            progress_bar.start(5)
-            filepath = self.import_file_entry.get()
-            filename = os.path.split(filepath)[1]
-            generate_keys(self.selected_curve_type,
-                          self.p, self.a, self.b, self.g)
-            encrypted_file_dest = f'{self.browse_folder_entry.get()}/{filename}.enc'
-            pub_key_b = get_keys(self.selected_curve_type)[1]
-
-            start_time = time()
-            encrypt(self.p, self.a, self.b, self.g,
-                    filepath, encrypted_file_dest, pub_key_b)
-            encrypt_time = time() - start_time
-            progress_window.destroy()
-            messagebox.showinfo(
-                "Message", "File has been encrypted!\nEncryption time: %.2fs" % round(encrypt_time, 3))
+            progress_bar.grab_set()
+            progress_bar.start()
+            new_thread = threading.Thread(target=self.encrypt_file)
+            new_thread.start()
+            self.after(1000, check_thread_finished)
         except Exception as e:
             messagebox.showinfo("Error", e)
 
-    def tk_process_encryption(self):
-        threading.Thread(target=self.encrypt_file).start()
-
     def decrypt_file(self):
+        self.thread_event.clear()
+        filepath = self.import_file_entry_dec.get()
+        filename = os.path.split(filepath)[1]
+        decrypted_file_dest = f'{self.browse_folder_entry_dec.get()}/{filename.replace(".enc", "")}'
+        priv_key_b = get_keys(self.selected_curve_type)[0]
+
+        start_time = time()
+        decrypt(self.p, self.a, self.b,
+                filepath, decrypted_file_dest, priv_key_b)
+        self.decryption_time = time() - start_time
+        self.thread_event.set()
+
+    def tk_process_decryption(self):
+        def check_thread_finished():
+            if self.thread_event.is_set():
+                progress_window.destroy()
+                messagebox.showinfo(
+                    "Message", "File has been decrypted!\nDecryption time: %.3fs" % round(self.decryption_time, 3))
+            else:
+                self.after(1000, check_thread_finished)
         try:
             progress_window = tk.Toplevel(window)
             progress_window.title('Decrypting...')
             progress_bar = ttk.Progressbar(
                 progress_window, orient='horizontal', length=300, mode='indeterminate')
             progress_bar.pack(pady=20)
-            progress_bar.start(5)
-            filepath = self.import_file_entry_dec.get()
-            filename = os.path.split(filepath)[1]
-            decrypted_file_dest = f'{self.browse_folder_entry_dec.get()}/{filename.replace(".enc", "")}'
-            priv_key_b = get_keys(self.selected_curve_type)[0]
-
+            progress_bar.grab_set()
+            progress_bar.start()
+            new_thread = threading.Thread(target=self.decrypt_file)
             start_time = time()
-            decrypt(self.p, self.a, self.b,
-                    filepath, decrypted_file_dest, priv_key_b)
-            encrypt_time = time() - start_time
-            progress_window.destroy()
-            messagebox.showinfo(
-                "Message", "File has been decrypted!\nDecryption time: %.2fs" % round(encrypt_time, 3))
+            new_thread.start()
+            self.after(1000, check_thread_finished)
+
         except Exception as e:
             messagebox.showinfo("Error", e)
-    
-    def tk_process_decryption(self):
-        threading.Thread(target=self.decrypt_file).start()
 
     def upload_file(self):
         file_location = filedialog.askopenfilename()
@@ -186,6 +215,6 @@ class CryptApp(ttk.Notebook):
 
 
 window = tk.Tk()
-window.title('File Encryption Tool')
+window.title('CryptApp')
 CryptApp(window).pack()
 window.mainloop()

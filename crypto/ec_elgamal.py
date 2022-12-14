@@ -1,3 +1,4 @@
+import base64
 from itertools import islice
 from math import log
 from random import randrange
@@ -33,33 +34,36 @@ def get_keys(curve_type):
 
 
 def encrypt(p, a, b, g, src, dest, pub_key_b):
-    def read_in_chunks(file_object, chunk_size=512):
+    def read_in_chunks(file_object, chunk_size=1024):
         while True:
             data = file_object.read(chunk_size)
             if not data:
                 break
             yield data
     
-    GROUP_SIZE = int(log(p, BASE))
+    group_size = int(log(p, BASE)) - 1
 
-    with open(src, 'r', encoding='utf-8') as plain_file, open(dest, 'w' ,encoding='utf-8') as cipher_file:
+    with open(src, 'rb') as plain_file, open(dest, 'wb') as cipher_file:
         priv_key_a = randrange(1, p)
         cipher_1 = multiply(a, b, p, priv_key_a, g)
         shared_key = multiply(a, b, p, priv_key_a, pub_key_b)
         cipher_file.write(
-            f'{cipher_1.get_x():x}{SEPARATOR}{cipher_1.get_y():x}\n')
+            b'%x%b%x\n' % (cipher_1.get_x(),
+                           SEPARATOR.encode(),
+                           cipher_1.get_y()))
 
         for text in read_in_chunks(plain_file):
-            ascii_values = list(map(ord, list(text)))
+            b64text = base64.b64encode(text).decode()
+            ascii_values = list(map(ord, b64text))
             ascii_value_group_sums = []
 
-            for i in range(0, len(ascii_values), GROUP_SIZE):
-                group = ascii_values[i:i + GROUP_SIZE][::-1]
+            for i in range(0, len(ascii_values), group_size):
+                group = ascii_values[i:i + group_size][::-1]
                 coordinate = sum(
                     [e * BASE ** j for j, e in enumerate(group)])
                 ascii_value_group_sums.append(coordinate)
 
-            if (len(ascii_value_group_sums) % 2 == 1):
+            if len(ascii_value_group_sums) % 2 == 1:
                 ascii_value_group_sums.append(WHITESPACE)
 
             for i in range(0, len(ascii_value_group_sums), 2):
@@ -67,26 +71,30 @@ def encrypt(p, a, b, g, src, dest, pub_key_b):
                 cipher_point = add(a, b, p, Point(
                     point[0], point[1]), shared_key)
                 cipher_file.write(
-                    f'{cipher_point.get_x():x}{SEPARATOR}{cipher_point.get_y():x}\n')
+                    b'%x%b%x\n' % (cipher_point.get_x(),
+                                   SEPARATOR.encode(),
+                                   cipher_point.get_y()))
 
 
 def decrypt(p, a, b, src, dest, priv_key_b):
-    def read_in_chunks(file_object, chunk_size=512):
+    def read_in_lines(file_object, lines_count=128):
         while True:
-            data = list(islice(file_object, chunk_size))
+            data = list(islice(file_object, lines_count))
             if not data:
                 break
             yield data
 
-    with open(src, 'r', encoding='utf-8') as cipher_file, open(dest, 'w', encoding='utf-8') as plain_file:
-        cipher_1 = cipher_to_point(cipher_file.readline())
+    with open(src, 'rb') as cipher_file, open(dest, 'wb') as plain_file:
+        cipher_1 = cipher_to_point(cipher_file.readline().decode())
         neg_shared_key = multiply(a, b, p, -priv_key_b, cipher_1)
-        for lines in read_in_chunks(cipher_file):
-            cipher_2 = list(map(cipher_to_point, lines))
-            ascii_values = []
+        plaintext = ''
+        for lines in read_in_lines(cipher_file):
+            cipher_2 = list(map(cipher_to_point, [line.decode() for line in lines]))
             for cipher in cipher_2:
                 message_point = add(a, b, p, cipher, neg_shared_key)
                 x, y = message_point.get_x(), message_point.get_y()
-                ascii_values.extend(to_base(x, BASE) + to_base(y, BASE))
-            plaintext = ''.join(list(map(chr, ascii_values)))
-            plain_file.write(plaintext)
+                plaintext += ''.join(list(map(chr, to_base(x, BASE) + to_base(y, BASE))))
+        b64lines = plaintext.split(' ')
+        lines = list(map(base64.b64decode, b64lines))
+        for line in lines:
+            plain_file.write(line)
