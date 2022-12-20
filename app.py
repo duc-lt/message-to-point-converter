@@ -122,24 +122,37 @@ class CryptApp(ttk.Notebook):
     def encrypt_file(self):
         self.thread_event.clear()
         filepath = self.import_file_entry.get()
-        filename = os.path.split(filepath)[1]
-        generate_keys(self.selected_curve_type,
-                      self.p, self.a, self.b, self.g)
-        encrypted_file_dest = f'{self.browse_folder_entry.get()}/{filename}.enc'
-        pub_key_b = get_keys(self.selected_curve_type)[1]
+        savepath = self.browse_folder_entry.get()
+        if not filepath:
+            messagebox.showinfo(
+                    "Message", "Please choose file to encript")
+            self.thread_event.set()
+        if not savepath:
+            messagebox.showinfo(
+                    "Message", "Please choose location to save the encripted file")
+            self.thread_event.set()
+        if filepath != '' and savepath != '':
+            filename = os.path.split(filepath)[1]
+            generate_keys(self.selected_curve_type,
+                        self.p, self.a, self.b, self.g)
+            encrypted_file_dest = f'{savepath}/{filename}.enc'
+            pub_key_b = get_keys(self.selected_curve_type)[1]
 
-        start_time = time()
-        encrypt(self.p, self.a, self.b, self.g,
-                filepath, encrypted_file_dest, pub_key_b)
-        self.encryption_time = time() - start_time
-        self.thread_event.set()
+            start_time = time()
+            encrypt(self.p, self.a, self.b, self.g,
+                    filepath, encrypted_file_dest, pub_key_b)
+            self.encryption_time = time() - start_time
+            self.thread_event.set()
 
     def tk_process_encryption(self):
         def check_thread_finished():
             if self.thread_event.is_set():
                 progress_window.destroy()
-                messagebox.showinfo(
-                    "Message", "File has been encrypted!\nEncryption time: %.3fs" % round(self.encryption_time, 3))
+                filepath = self.import_file_entry.get()
+                savepath = self.browse_folder_entry.get()
+                if filepath != '' and savepath != '':
+                    messagebox.showinfo(
+                        "Message", "File has been encrypted!\nEncryption time: %.3fs" % round(self.encryption_time, 3))
             else:
                 self.after(1000, check_thread_finished)
         try:
@@ -159,22 +172,39 @@ class CryptApp(ttk.Notebook):
     def decrypt_file(self):
         self.thread_event.clear()
         filepath = self.import_file_entry_dec.get()
-        filename = os.path.split(filepath)[1]
-        decrypted_file_dest = f'{self.browse_folder_entry_dec.get()}/{filename.replace(".enc", "")}'
-        priv_key_b = get_keys(self.selected_curve_type)[0]
+        savepath = self.browse_folder_entry_dec.get()
+        if not filepath:
+            messagebox.showinfo(
+                    "Message", "Please choose file to decript")
+            self.thread_event.set()
+        if not savepath:
+            messagebox.showinfo(
+                    "Message", "Please choose location to save the decripted file")
+            self.thread_event.set()
+        if filepath != '' and not filepath.endswith('.enc'):
+            messagebox.showinfo(
+                    "Message", "Wrong type - file to decript must end with '.enc'")
+            self.thread_event.set()
+        if filepath != '' and savepath != '' and filepath.endswith('.enc'):
+            filename = os.path.split(filepath)[1]
+            decrypted_file_dest = f'{savepath}/{filename.replace(".enc", "")}'
+            priv_key_b = get_keys(self.selected_curve_type)[0]
 
-        start_time = time()
-        decrypt(self.p, self.a, self.b,
-                filepath, decrypted_file_dest, priv_key_b)
-        self.decryption_time = time() - start_time
-        self.thread_event.set()
+            start_time = time()
+            decrypt(self.p, self.a, self.b,
+                    filepath, decrypted_file_dest, priv_key_b)
+            self.decryption_time = time() - start_time
+            self.thread_event.set()
 
     def tk_process_decryption(self):
         def check_thread_finished():
             if self.thread_event.is_set():
                 progress_window.destroy()
-                messagebox.showinfo(
-                    "Message", "File has been decrypted!\nDecryption time: %.3fs" % round(self.decryption_time, 3))
+                filepath = self.import_file_entry_dec.get()
+                savepath = self.browse_folder_entry_dec.get()
+                if filepath != '' and savepath != '' and filepath.endswith('.enc'):
+                    messagebox.showinfo(
+                        "Message", "File has been decrypted!\nDecryption time: %.3fs" % round(self.decryption_time, 3))
             else:
                 self.after(1000, check_thread_finished)
         try:
@@ -186,7 +216,6 @@ class CryptApp(ttk.Notebook):
             progress_bar.grab_set()
             progress_bar.start()
             new_thread = threading.Thread(target=self.decrypt_file)
-            start_time = time()
             new_thread.start()
             self.after(1000, check_thread_finished)
 
